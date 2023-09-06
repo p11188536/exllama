@@ -182,6 +182,15 @@ class ExLlamaGenerator:
         self.sequence = in_tokens.clone()
         self.sequence_actual = in_tokens.clone()
         self.cache.current_seq_len = 0
+        """
+        tensor([[530, 22244, 29911, ..., 29901, 13, 13]])
+        torch.Size([1, 28886])
+        """
+        # # 删除max_seq_len后的token
+        if self.sequence.shape[-1] > self.model.config.max_seq_len:
+             self.sequence = self.sequence[:, :self.model.config.max_seq_len]
+             self.sequence_actual = self.sequence_actual[:, :self.model.config.max_seq_len]
+
 
         self.model.forward(self.sequence[:, :-1], self.cache, preprocess_only = True, lora = self.lora, input_mask = mask)
 
@@ -313,11 +322,12 @@ class ExLlamaGenerator:
         self.end_beam_search()
 
         ids, mask = self.tokenizer.encode(prompt, return_mask = True, max_seq_len = self.model.config.max_seq_len)
+
         self.gen_begin(ids, mask = mask)
 
-        max_new_tokens = min(max_new_tokens, self.model.config.max_seq_len - ids.shape[1])
+        max_new_tokens = min(max_new_tokens, self.model.config.max_seq_len - self.sequence.shape[1])
 
-        eos = torch.zeros((ids.shape[0],), dtype = torch.bool)
+        eos = torch.zeros((self.sequence.shape[0],), dtype = torch.bool)
         for i in range(max_new_tokens):
             token = self.gen_single_token(mask = mask)
             for j in range(token.shape[0]):
